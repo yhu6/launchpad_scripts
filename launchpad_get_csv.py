@@ -9,10 +9,11 @@ import sys
 import csv
 import os
 import datetime
+import xlsxwriter
 
 from launchpadlib.launchpad import Launchpad
 
-DEST_DIR = '/home/ec/workspace/lp/'
+WORK_DIR = os.getcwd()
 
 ALL_STATUSES = [
     'New',
@@ -30,12 +31,15 @@ fieldnames = \
     'Last Updated Time', 'Date Triaged', 'Severity', \
     'Reproducible', 'Repro Rate', 'Workaround', 'Comments'
 
+# in the workbook, multiple worksheets will be created
+# for each of these tags:
+targetTags = ['stx.2.0', 'stx.distro.openstack', 'stx.distro.other', \
+              'stx.containers', 'stx.networking', 'stx.upstream']
 
 def limit_time_str(aDateTime):
     """Limit datetime string to remove Milliseconds and Seconds"""
     return None if aDateTime is None else aDateTime.strftime(
         '%Y-%m-%d %H:%M UTC')
-
 
 def get_bug_info_tuple(a_bug):
     """
@@ -88,7 +92,7 @@ def get_bug_info_tuple(a_bug):
     # match tuple data with 'fieldnames'
     string = \
         bugInfoId, bugInfoTitle, bugImportance, \
-        bugStatus, bugAssignee, bugReporter, bugInfoTags, \
+        bugStatus, bugAssignee, bugReporter, str(bugInfoTags), \
         bugWebLink, bugDuplicateOfLink, \
         bugPrivate, bugSecurityRelated, bugCreatedDate, \
         bugLastUpdatedDate, bugDateTriaged, bugSeverity, \
@@ -181,31 +185,56 @@ def bugs_to_csv(promptArgs=False):
         project = launchpad.projects['starlingx']
 
         bugs = project.searchTasks(status=ALL_STATUSES, omit_duplicates=False)
-        currentDate = datetime.datetime.now().strftime('%Y-%m-%d')
+        currentDate = datetime.datetime.now().strftime('%Y-%m-%d-%H')
+        """
         file_n = 'launchpad-bugs-' + anon_or_auth + currentDate + '.csv'
-        print('Destination file is: ' + DEST_DIR + file_n)
+        print('Destination file is: ' + WORK_DIR + file_n)
 
         if os.path.isfile(DEST_DIR + file_n):
             updateFileQuestion = "File Exists, do you want to overwrite it?"
             overWriteFile = query_yes_no(updateFileQuestion, "no")
             if overWriteFile is False:
                 raise ValueError("Overwrite existing file is False")
-
         with open(DEST_DIR + file_n, 'wb') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(fieldnames)
             for each_bug in bugs:
                 bugInfoString = get_bug_info_tuple(each_bug)
                 writer.writerow(bugInfoString)
+        """
+        # create my workbook
+        workbook_filename = 'stx_lp_workbook-' + anon_or_auth + currentDate + '.xlsx'
+        workbook = xlsxwriter.Workbook(WORK_DIR + "/"+ workbook_filename)
+        print "Starting write LP data to worksheets according to the tag ......"
+        for tag in targetTags:
+            worksheet = workbook.add_worksheet(tag)
+            # with each of sheets (named under targeted tag),
+            # loop all bugs to find the bug with such a tag,
+            # and wite the bug one by one into this sheeet.
+            row = 1;
+            worksheet.write_row('A'+str(row), list(fieldnames))
+            #worksheet = stx_lp_workbook.get_worksheet_by_name(tag)
+            for each_bug in bugs:
+                if tag in each_bug.bug.tags:
+                    row += 1
+                    bugId = str(each_bug.bug.id)
+                    print "writting LP " + bugId + " at row #" + str (row) + " into sheet: " + tag
+                    bugInfoString = get_bug_info_tuple(each_bug)
+                    worksheet.write_row('A'+str(row), list(bugInfoString))
+
+        print "Complete writting worksheets and closed workbook!"
+        workbook.close()
 
     except BaseException as e:
         print e.message, e.args
 
     finally:
-            if anon_or_auth == 'authorized_':
-                os.remove(cachedir + '/auth.txt')
+        workbook.close()
+        if anon_or_auth == 'authorized_':
+            os.remove(cachedir + '/auth.txt')
 
 
 if __name__ == "__main__":
     boolCred = use_cred()
     bugs_to_csv(boolCred)
+
