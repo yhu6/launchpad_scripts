@@ -1,9 +1,15 @@
 # launchpad_scripts
-host scripts to work with https://launchpad.net, such as exporting LP (issues).
+scripts to work with https://launchpad.net, such as exporting LP (issues).
+
+Acknowledgement: this script was originally from Zvonar, Bill <Bill.Zvonar@windriver.com>
+the 1st version supported .csv format. While, in order to categorize LPs with multiple-tags,
+we import xlsxwriter lib for multiple worksheets in one workbook.
+
 
 HOW-TO-Use:
-1. install python lib launchpadlib: 
+1. install python lib launchpadlib and xlsxwriter:
 ```pip install launchpadlib```
+```pip install xlsxwriter```
 
 2. run the script
 ```python launchpad_get_csv.py```

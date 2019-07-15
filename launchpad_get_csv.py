@@ -28,7 +28,8 @@ fieldnames = \
     'Web Link', 'Link to Duplicates of bug', \
     'Private', 'Security Related', 'Created Time', \
     'Last Updated Time', 'Date Triaged', 'Severity', \
-    'Reproducible', 'Repro Rate', 'Workaround', 'Comments'
+    'Upstream Issue', 'Reproducible', 'Repro Rate', \
+    'Workaround', 'Comments'
 
 # in the workbook, multiple worksheets will be created
 # for each of these tags:
@@ -86,9 +87,10 @@ def get_bug_info_tuple(a_bug):
     #bugDateLeftNew = limit_time_str(a_bug.date_left_new)
     bugDateTriaged = limit_time_str(a_bug.date_triaged)
 
-    # Extended Columns
+    # Extended Columns, NEED be checked MANUALLY!!
     bugSeverity = 'TBD'.encode('utf-8')
-    bugReproducible = False
+    bugIsUpstream = False
+    bugReproducible = True
     bugReproduceRate = 'TBD'.encode('utf-8')
     bugWorkaround = False
     bugComments = 'Other Comments'.encode('utf-8')
@@ -100,7 +102,8 @@ def get_bug_info_tuple(a_bug):
         bugWebLink, bugDuplicateOfLink, \
         bugPrivate, bugSecurityRelated, bugCreatedDate, \
         bugLastUpdatedDate, bugDateTriaged, bugSeverity, \
-        bugReproducible, bugReproduceRate, bugWorkaround, bugComments
+        bugIsUpstream, bugReproducible, bugReproduceRate, \
+        bugWorkaround, bugComments
     return string
 
 
@@ -212,14 +215,20 @@ def bugs_to_csv(promptArgs=False):
         print "Start writing LP data to worksheets according to the tag ......"
         worksheet_dict = {}
         row_dict = {}
+        worksheet_dict['all_open'] = workbook.add_worksheet('all_open')
+        worksheet_dict['all_open'].write_row(0, 0, list(fieldnames))
+        row_dict['all_open'] = 1
         for tag in targetTags:
             worksheet_dict[tag] = workbook.add_worksheet(tag)
             worksheet_dict[tag].write_row(0, 0, list(fieldnames))
             row_dict[tag] = 1
         for each_bug in bugs:
+            bugInfoStringList = get_bug_info_tuple(each_bug)
+            worksheet_dict['all_open'].write_row(row_dict['all_open'], 0, bugInfoStringList)
+            row_dict['all_open'] += 1
             for tag in targetTags:
                 if tag in each_bug.bug.tags:
-                    worksheet_dict[tag].write_row(row_dict[tag], 0, get_bug_info_tuple(each_bug))
+                    worksheet_dict[tag].write_row(row_dict[tag], 0, bugInfoStringList)
                     row_dict[tag] += 1
                     bugId = str(each_bug.bug.id)
                     row = row_dict[tag]
