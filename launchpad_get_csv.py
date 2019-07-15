@@ -1,9 +1,8 @@
-#!/usr/bin/python
-
 ##########################################################################
 # Get data from Launchpad project and put into a CSV file for further
 # processing. Record Important fields about bugs
 ##########################################################################
+# -*- coding: utf-8 -*-
 
 import sys
 import csv
@@ -39,7 +38,7 @@ targetTags = ['stx.2.0', 'stx.distro.openstack', 'stx.distro.other', \
 def limit_time_str(aDateTime):
     """Limit datetime string to remove Milliseconds and Seconds"""
     return None if aDateTime is None else aDateTime.strftime(
-        '%Y-%m-%d %H:%M UTC')
+        '%Y-%m-%d %H:%M UTC').encode('utf-8')
 
 def get_bug_info_tuple(a_bug):
     """
@@ -49,7 +48,9 @@ def get_bug_info_tuple(a_bug):
     """
     bugInfo = a_bug.bug
     bugInfoId = bugInfo.id
-    bugInfoTitle = bugInfo.title.encode('utf-8')
+    # NOTE: user input fields, such as "title"  might include
+    #  non-ascii char, so MUST NOT encode to UTF
+    bugInfoTitle = bugInfo.title
     bugImportance = a_bug.importance.encode('utf-8')
     bugStatus = a_bug.status.encode('utf-8')
     try:
@@ -60,15 +61,18 @@ def get_bug_info_tuple(a_bug):
         bugReporter = a_bug.owner.name.encode('utf-8')
     except:
         bugReporter = a_bug.owner.encode('utf-8')
-    bugInfoTags = bugInfo.tags
+    bugInfoTags = str(bugInfo.tags)
     bugWebLink = a_bug.web_link.encode('utf-8')
     #bugIsComplete = a_bug.is_complete
     bugDuplicateOfLink = bugInfo.duplicate_of_link
+    if bugDuplicateOfLink is not None:
+        bugDuplicateOfLink = bugDuplicateOfLink.encode('utf-8')
+
     bugPrivate = bugInfo.private
     bugSecurityRelated = bugInfo.security_related
     if bugPrivate is True:
         if bugSecurityRelated is True:
-            bugInfoTitle = None
+            bugInfoTitle = ''
     bugLastUpdatedDate = limit_time_str(bugInfo.date_last_updated)
     #bugAssignedDate = limit_time_str(a_bug.date_assigned)
     #bugClosedDate = limit_time_str(a_bug.date_closed)
@@ -83,16 +87,16 @@ def get_bug_info_tuple(a_bug):
     bugDateTriaged = limit_time_str(a_bug.date_triaged)
 
     # Extended Columns
-    bugSeverity = 'TBD'
-    bugReproducible = 'TBD (Yes or No)'
-    bugReproduceRate = 'TBD (%)'
-    bugWorkaround = 'TBD (Yes or No)'
-    bugComments = 'Other Comments'
+    bugSeverity = 'TBD'.encode('utf-8')
+    bugReproducible = False
+    bugReproduceRate = 'TBD'.encode('utf-8')
+    bugWorkaround = False
+    bugComments = 'Other Comments'.encode('utf-8')
     # Create string with info and write
     # match tuple data with 'fieldnames'
     string = \
         bugInfoId, bugInfoTitle, bugImportance, \
-        bugStatus, bugAssignee, bugReporter, str(bugInfoTags), \
+        bugStatus, bugAssignee, bugReporter, bugInfoTags, \
         bugWebLink, bugDuplicateOfLink, \
         bugPrivate, bugSecurityRelated, bugCreatedDate, \
         bugLastUpdatedDate, bugDateTriaged, bugSeverity, \
@@ -185,10 +189,10 @@ def bugs_to_csv(promptArgs=False):
         project = launchpad.projects['starlingx']
 
         bugs = project.searchTasks(status=ALL_STATUSES, omit_duplicates=False)
-        currentDate = datetime.datetime.now().strftime('%Y-%m-%d-%H')
+        currentDate = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')
         """
         file_n = 'launchpad-bugs-' + anon_or_auth + currentDate + '.csv'
-        print('Destination file is: ' + WORK_DIR + file_n)
+        print('Destination file is: ' + WORK_DIR + '/' + file_n)
 
         if os.path.isfile(DEST_DIR + file_n):
             updateFileQuestion = "File Exists, do you want to overwrite it?"
@@ -205,26 +209,45 @@ def bugs_to_csv(promptArgs=False):
         # create my workbook
         workbook_filename = 'stx_lp_workbook-' + anon_or_auth + currentDate + '.xlsx'
         workbook = xlsxwriter.Workbook(WORK_DIR + "/"+ workbook_filename)
-        print "Starting write LP data to worksheets according to the tag ......"
+        print "Start writing LP data to worksheets according to the tag ......"
+        worksheet_dict = {}
+        row_dict = {}
+        for tag in targetTags:
+            worksheet_dict[tag] = workbook.add_worksheet(tag)
+            worksheet_dict[tag].write_row(0, 0, list(fieldnames))
+            row_dict[tag] = 1
+        for each_bug in bugs:
+            for tag in targetTags:
+                if tag in each_bug.bug.tags:
+                    worksheet_dict[tag].write_row(row_dict[tag], 0, get_bug_info_tuple(each_bug))
+                    row_dict[tag] += 1
+                    bugId = str(each_bug.bug.id)
+                    row = row_dict[tag]
+                    print "writting LP " + bugId + " at row #" + str(row) + " into sheet: " + tag
+        workbook.close()
+        # old mehtod: totally loop number of tags * number of bugs
+        # not efficient enough, so commented those lines out
+        """
         for tag in targetTags:
             worksheet = workbook.add_worksheet(tag)
             # with each of sheets (named under targeted tag),
             # loop all bugs to find the bug with such a tag,
             # and wite the bug one by one into this sheeet.
-            row = 1;
-            worksheet.write_row('A'+str(row), list(fieldnames))
+            row = 0;
+            worksheet.write_row(row, 0, list(fieldnames))
+            print worksheet
             #worksheet = stx_lp_workbook.get_worksheet_by_name(tag)
             for each_bug in bugs:
                 if tag in each_bug.bug.tags:
                     row += 1
                     bugId = str(each_bug.bug.id)
-                    print "writting LP " + bugId + " at row #" + str (row) + " into sheet: " + tag
                     bugInfoString = get_bug_info_tuple(each_bug)
-                    worksheet.write_row('A'+str(row), list(bugInfoString))
+                    worksheet.write_row(row, 0, bugInfoString)
+                    print "writting LP " + bugId + " at row #" + str(row+1) + " into sheet: " + tag
 
         print "Complete writting worksheets and closed workbook!"
         workbook.close()
-
+        """
     except BaseException as e:
         print e.message, e.args
 
